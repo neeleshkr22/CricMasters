@@ -1,0 +1,123 @@
+{
+  "_instructions": "Add real stadium GIF URLs from Tenor/Giphy. Each stadium can have multiple GIFs.",
+  
+  "stadiums": {
+    "Lord's": [
+      "https://media.tenor.com/lords-stadium-1.gif",
+      "https://media.tenor.com/lords-stadium-2.gif"
+    ],
+    "Eden Gardens": [
+      "https://media.tenor.com/eden-gardens-1.gif",
+      "https://media.tenor.com/eden-gardens-2.gif",
+      "https://media.tenor.com/kolkata-stadium.gif"
+    ],
+    "MCG": [
+      "https://media.tenor.com/mcg-stadium-1.gif",
+      "https://media.tenor.com/mcg-stadium-2.gif"
+    ],
+    "Wankhede Stadium": [
+      "https://media.tenor.com/wankhede-stadium-1.gif",
+      "https://media.tenor.com/wankhede-stadium-2.gif",
+      "https://media.tenor.com/mumbai-stadium.gif"
+    ],
+    "Wanderers": [
+      "https://media.tenor.com/wanderers-stadium.gif"
+    ],
+    "Seddon Park": [
+      "https://media.tenor.com/seddon-park.gif"
+    ],
+    "Gaddafi Stadium": [
+      "https://media.tenor.com/gaddafi-stadium.gif"
+    ],
+    "Rajiv Gandhi Stadium": [
+      "https://media.tenor.com/hyderabad-stadium.gif"
+    ],
+    "M. Chinnaswamy Stadium": [
+      "https://media.tenor.com/bangalore-stadium.gif"
+    ],
+    "Narendra Modi Stadium": [
+      "https://media.tenor.com/ahmedabad-stadium.gif"
+    ],
+    "default": [
+      "https://media.giphy.com/media/cricket-stadium.gif",
+      "https://media.tenor.com/cricket-ground.gif"
+    ]
+  },
+  
+  "commentary": {
+    "dot_ball": [
+      "Solid defense! The ball goes nowhere.",
+      "Well left by the batsman!",
+      "Beaten! Just past the outside edge.",
+      "Good line and length, no run.",
+      "Defended back to the bowler.",
+      "Playing it safe, dot ball."
+    ],
+    "single": [
+      "Quick single taken!",
+      "Easy single to rotate the strike.",
+      "Nudged away for one.",
+      "Tapped into the gap for a single.",
+      "Soft hands, quick single."
+    ],
+    "two_runs": [
+      "Good running between the wickets!",
+      "They scamper back for two!",
+      "Excellent placement, two runs.",
+      "Running hard, gets a double!"
+    ],
+    "three_runs": [
+      "Overthrow! They get three!",
+      "Misfield, three runs!",
+      "Brilliant running, three!"
+    ],
+    "four": [
+      "FOUR! What a shot!",
+      "BOUNDARY! Cracking stroke!",
+      "FOUR! That's timed to perfection!",
+      "Races away to the fence for FOUR!",
+      "FOUR! Glorious cover drive!",
+      "FOUR! Finds the gap beautifully!"
+    ],
+    "six": [
+      "SIX! That's MASSIVE!",
+      "SIX! Out of the ground!",
+      "MAXIMUM! What a hit!",
+      "SIX! Into the stands!",
+      "HUGE SIX! That's gone miles!",
+      "SIX! Absolutely hammered!",
+      "MONSTER HIT! That's a SIX!"
+    ],
+    "wicket": [
+      "WICKET! He's gone!",
+      "OUT! What a delivery!",
+      "BOWLED HIM! Timber!",
+      "CAUGHT! Simple catch!",
+      "WICKET! The bowler strikes!",
+      "OUT! That's a brilliant ball!",
+      "GONE! Walks back to the pavilion!"
+    ],
+    "fifty": [
+      "FIFTY! What an innings!",
+      "Half-century! Well played!",
+      "50 up! Superb knock!",
+      "Brings up his fifty in style!"
+    ],
+    "century": [
+      "CENTURY! What a player!",
+      "100 runs! Magnificent innings!",
+      "HUNDRED! Standing ovation!",
+      "TON UP! Absolutely brilliant!"
+    ],
+    "wide": [
+      "Wide! That's way down leg side.",
+      "Wide called! Outside the guideline.",
+      "Pressure showing, wide ball."
+    ],
+    "no_ball": [
+      "No ball! Free hit coming up!",
+      "Overstepped! No ball called.",
+      "No ball! That's an extra run."
+    ]
+  }
+}

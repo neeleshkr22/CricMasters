@@ -1,0 +1,257 @@
+{
+  "_instructions": "Players can have multiple GIFs (as arrays). One will be randomly chosen during matches. Add your own Tenor/Giphy URLs!",
+  
+  "wicket_celebrations": {
+    "Jasprit Bumrah": [
+      "https://media.tenor.com/rZ8vY3qK9ZMAAAAC/jasprit-bumrah-wicket.gif",
+      "https://media.tenor.com/9tYBw8KGhz0AAAAC/bumrah-celebration.gif",
+      "https://media.tenor.com/xK7LqJ2wqMgAAAAC/bumrah-india.gif"
+    ],
+    "Mitchell Starc": [
+      "https://media.tenor.com/qH3FjK9YvDMAAAAC/mitchell-starc-wicket.gif",
+      "https://media.tenor.com/8tRzPvQx3NMAAAAC/starc-celebration.gif"
+    ],
+    "Rashid Khan": [
+      "https://media.tenor.com/nKzQp8YxD3IAAAAC/rashid-khan-wicket.gif",
+      "https://media.tenor.com/wF5GqN3YzKMAAAAC/rashid-khan-celebration.gif"
+    ],
+    "Trent Boult": [
+      "https://media.tenor.com/pQk7Yh2vXNAAAAAC/trent-boult-wicket.gif",
+      "https://media.tenor.com/n8F9xKqRvLEAAAAC/boult-celebration.gif"
+    ],
+    "Pat Cummins": [
+      "https://media.tenor.com/dK6GhYzQ3NwAAAAC/pat-cummins-wicket.gif",
+      "https://media.tenor.com/mP9vQx4K2HUAAAAC/cummins-celebration.gif"
+    ],
+    "Kagiso Rabada": [
+      "https://media.tenor.com/yT7Kx9vQ2MwAAAAC/rabada-wicket.gif",
+      "https://media.tenor.com/hN8FqY3vXNMAAAAC/rabada-celebration.gif"
+    ],
+    "Shaheen Afridi": [
+      "https://media.tenor.com/xK9GqN7vZNMAAAAC/shaheen-wicket.gif",
+      "https://media.tenor.com/pL8FxN3vQMwAAAAC/shaheen-celebration.gif"
+    ],
+    "Mohammed Shami": [
+      "https://media.tenor.com/qH7KxN9vYNAAAAAC/shami-wicket.gif",
+      "https://media.tenor.com/nF8GqY3vXMwAAAAC/shami-celebration.gif"
+    ],
+    "Yuzvendra Chahal": [
+      "https://media.tenor.com/mL9FxK8vZNMAAAAC/chahal-wicket.gif"
+    ],
+    "Kuldeep Yadav": [
+      "https://media.tenor.com/pN8GqL7vXMwAAAAC/kuldeep-wicket.gif"
+    ],
+    "Jofra Archer": [
+      "https://media.tenor.com/xL7KqN8vYMwAAAAC/archer-wicket.gif"
+    ],
+    "default": ["https://media.giphy.com/media/3o7TKSx0g7RqRniGFG/giphy.gif"]
+  },
+  
+  "century_celebrations": {
+    "Virat Kohli": [
+      "https://media.tenor.com/7nQx8vK9ZMAAAAC/virat-kohli-century.gif",
+      "https://media.tenor.com/pK9Gx7vXNMAAAAC/virat-celebration.gif",
+      "https://media.tenor.com/mL8FxK3vQNwAAAAC/kohli-100.gif",
+      "https://media.tenor.com/xN7KqG9vYMwAAAAC/virat-kiss.gif",
+      "https://media.tenor.com/qH8GxN7vZNAAAAAC/kohli-roar.gif"
+    ],
+    "Rohit Sharma": [
+      "https://media.tenor.com/nK8FxN9vYNMAAAAC/rohit-century.gif",
+      "https://media.tenor.com/pL7GqN8vXMwAAAAC/rohit-celebration.gif",
+      "https://media.tenor.com/xK9GqN7vZNMAAAAC/rohit-100.gif"
+    ],
+    "Babar Azam": [
+      "https://media.tenor.com/mP8FxN3vQNwAAAAC/babar-century.gif",
+      "https://media.tenor.com/qH9KxN7vYNAAAAAC/babar-celebration.gif"
+    ],
+    "Joe Root": [
+      "https://media.tenor.com/nL8GqN9vXMwAAAAC/root-century.gif",
+      "https://media.tenor.com/pK7FxN8vZNMAAAAC/root-celebration.gif"
+    ],
+    "Kane Williamson": [
+      "https://media.tenor.com/xN9KqG7vYMwAAAAC/kane-century.gif",
+      "https://media.tenor.com/mP8GxN3vQNAAAAAC/kane-celebration.gif"
+    ],
+    "Steve Smith": [
+      "https://media.tenor.com/qH8FxN7vZNMAAAAC/smith-century.gif",
+      "https://media.tenor.com/nK9GqN8vXMwAAAAC/smith-celebration.gif"
+    ],
+    "David Warner": [
+      "https://media.tenor.com/pL8KxN9vYNAAAAAC/warner-century.gif",
+      "https://media.tenor.com/xN7GqK8vQMwAAAAC/warner-celebration.gif"
+    ],
+    "AB de Villiers": [
+      "https://media.tenor.com/mP9FxN7vZNMAAAAC/abd-century.gif",
+      "https://media.tenor.com/qH8KxN3vXNAAAAAC/abd-celebration.gif",
+      "https://media.tenor.com/nL7GqN9vYMwAAAAC/abd-superman.gif"
+    ],
+    "MS Dhoni": [
+      "https://media.tenor.com/nL9GqN8vYMwAAAAC/dhoni-century.gif",
+      "https://media.tenor.com/pK8FxN7vQNMAAAAC/dhoni-celebration.gif"
+    ],
+    "Ben Stokes": [
+      "https://media.tenor.com/xK7GqN9vZNAAAAAC/stokes-century.gif",
+      "https://media.tenor.com/mN8FxN3vXMwAAAAC/stokes-celebration.gif"
+    ],
+    "KL Rahul": [
+      "https://media.tenor.com/qL9KxN8vYNMAAAAC/rahul-century.gif"
+    ],
+    "Quinton de Kock": [
+      "https://media.tenor.com/pN8FxL7vZNMAAAAC/dekock-century.gif"
+    ],
+    "Rishabh Pant": [
+      "https://media.tenor.com/mL8KxN9vQNMAAAAC/pant-century.gif"
+    ],
+    "default": ["https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif"]
+  },
+  
+  "fifty_celebrations": {
+    "Virat Kohli": [
+      "https://media.tenor.com/qL9KxN8vYNMAAAAC/virat-fifty.gif",
+      "https://media.tenor.com/pK7FxN9vZNAAAAAC/kohli-50.gif"
+    ],
+    "Rohit Sharma": [
+      "https://media.tenor.com/xN8GqK7vXMwAAAAC/rohit-fifty.gif",
+      "https://media.tenor.com/mP9FxN3vQNMAAAAC/rohit-50.gif"
+    ],
+    "David Warner": [
+      "https://media.tenor.com/nK8FxN7vYNAAAAAC/warner-fifty.gif",
+      "https://media.tenor.com/qH9KxN8vZMwAAAAC/warner-50.gif"
+    ],
+    "KL Rahul": [
+      "https://media.tenor.com/pL8GqN9vXNMAAAAC/rahul-fifty.gif"
+    ],
+    "Jos Buttler": [
+      "https://media.tenor.com/xK7FxN8vYMwAAAAC/buttler-fifty.gif",
+      "https://media.tenor.com/mN9GqN7vQNAAAAAC/buttler-50.gif"
+    ],
+    "Babar Azam": [
+      "https://media.tenor.com/qH8KxN7vZNMAAAAC/babar-fifty.gif"
+    ],
+    "Shikhar Dhawan": [
+      "https://media.tenor.com/nK7FxN9vYMwAAAAC/dhawan-fifty.gif"
+    ],
+    "default": ["https://media.giphy.com/media/3o6Zt6ML6BklcajjsA/giphy.gif"]
+  },
+  
+  "six_celebrations": {
+    "MS Dhoni": [
+      "https://media.tenor.com/qH9KxN7vZNMAAAAC/dhoni-six.gif",
+      "https://media.tenor.com/pL8FxN3vXMwAAAAC/dhoni-helicopter.gif",
+      "https://media.tenor.com/xN7GqK9vYNAAAAAC/dhoni-sixer.gif",
+      "https://media.tenor.com/mP8GxN7vQNMAAAAC/dhoni-finisher.gif"
+    ],
+    "Chris Gayle": [
+      "https://media.tenor.com/mP8GxN7vQNMAAAAC/gayle-six.gif",
+      "https://media.tenor.com/nK9FxN8vZNAAAAAC/gayle-power.gif",
+      "https://media.tenor.com/qH8KxN7vXMwAAAAC/gayle-celebration.gif",
+      "https://media.tenor.com/pL9GqN8vYNMAAAAC/gayle-universe-boss.gif"
+    ],
+    "AB de Villiers": [
+      "https://media.tenor.com/pL9GqN8vYNMAAAAC/abd-six.gif",
+      "https://media.tenor.com/xK7FxN9vQNAAAAAC/abd-360.gif",
+      "https://media.tenor.com/mN8FxN7vZNMAAAAC/abd-superman.gif"
+    ],
+    "Andre Russell": [
+      "https://media.tenor.com/mN8FxN7vZNMAAAAC/russell-six.gif",
+      "https://media.tenor.com/qH9KxN3vXMwAAAAC/russell-power.gif"
+    ],
+    "Hardik Pandya": [
+      "https://media.tenor.com/nL8GqN9vYNAAAAAC/hardik-six.gif",
+      "https://media.tenor.com/pK7FxN8vQNMAAAAC/hardik-celebration.gif"
+    ],
+    "Rohit Sharma": [
+      "https://media.tenor.com/xN9KqG7vZNMAAAAC/rohit-six.gif",
+      "https://media.tenor.com/mP8FxN3vXNAAAAAC/rohit-pullshot.gif"
+    ],
+    "Virat Kohli": [
+      "https://media.tenor.com/qH8GxN7vYMwAAAAC/virat-six.gif",
+      "https://media.tenor.com/nK9FxN8vQNMAAAAC/kohli-six.gif"
+    ],
+    "Kieron Pollard": [
+      "https://media.tenor.com/pL8KxN9vZNAAAAAC/pollard-six.gif"
+    ],
+    "Glenn Maxwell": [
+      "https://media.tenor.com/xN7KqG9vYMwAAAAC/maxwell-six.gif",
+      "https://media.tenor.com/mL8FxK3vQNwAAAAC/maxwell-switch-hit.gif"
+    ],
+    "Suryakumar Yadav": [
+      "https://media.tenor.com/qH9KxN7vZNMAAAAC/sky-six.gif",
+      "https://media.tenor.com/nK8FxN9vYNMAAAAC/suryakumar-six.gif"
+    ],
+    "Rishabh Pant": [
+      "https://media.tenor.com/pL7FxN8vQNAAAAAC/pant-six.gif"
+    ],
+    "default": ["https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif"]
+  },
+  
+  "four_celebrations": {
+    "Virat Kohli": [
+      "https://media.tenor.com/mP9FxN7vQNMAAAAC/virat-cover-drive.gif",
+      "https://media.tenor.com/qH8KxN3vXNAAAAAC/kohli-four.gif"
+    ],
+    "Kane Williamson": [
+      "https://media.tenor.com/nL9GqN8vYMwAAAAC/kane-four.gif"
+    ],
+    "Joe Root": [
+      "https://media.tenor.com/pK8FxN7vZNMAAAAC/root-four.gif"
+    ],
+    "Babar Azam": [
+      "https://media.tenor.com/xK7GqN9vXMwAAAAC/babar-four.gif",
+      "https://media.tenor.com/mN8FxN3vQNAAAAAC/babar-cover-drive.gif"
+    ],
+    "Sachin Tendulkar": [
+      "https://media.tenor.com/qH9KxN7vZNMAAAAC/sachin-cover-drive.gif"
+    ],
+    "default": ["https://media.giphy.com/media/3oEjHV0z8S7WM4MwnK/giphy.gif"]
+  },
+  
+  "match_win": {
+    "India": [
+      "https://media.tenor.com/qH9KxN7vZNMAAAAC/india-win.gif",
+      "https://media.tenor.com/pL8FxN3vXMwAAAAC/team-india-celebration.gif"
+    ],
+    "Australia": [
+      "https://media.tenor.com/xN7GqK9vYNAAAAAC/australia-win.gif"
+    ],
+    "England": [
+      "https://media.tenor.com/mP8GxN7vQNMAAAAC/england-win.gif"
+    ],
+    "Pakistan": [
+      "https://media.tenor.com/nK9FxN8vZNAAAAAC/pakistan-win.gif"
+    ],
+    "default": [
+      "https://media.giphy.com/media/26u4lOMA8JKSnL9Uk/giphy.gif",
+      "https://media.tenor.com/qH8KxN7vXMwAAAAC/cricket-celebration.gif"
+    ]
+  },
+  
+  "match_start": {
+    "default": [
+      "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+      "https://media.tenor.com/pL9GqN8vYNMAAAAC/toss.gif",
+      "https://media.tenor.com/xK7FxN9vQNAAAAAC/match-start.gif"
+    ]
+  },
+  
+  "hat_trick": {
+    "default": [
+      "https://media.tenor.com/xK7FxN9vQNAAAAAC/hat-trick.gif",
+      "https://media.tenor.com/mN8FxN7vZNMAAAAC/hat-trick-celebration.gif"
+    ]
+  },
+  
+  "duck_out": {
+    "default": [
+      "https://media.tenor.com/qH9KxN3vXMwAAAAC/golden-duck.gif",
+      "https://media.tenor.com/nL8GqN9vYNAAAAAC/out-for-duck.gif"
+    ]
+  },
+  
+  "super_over": {
+    "default": [
+      "https://media.giphy.com/media/3o7aCWJavAgtBzLWrS/giphy.gif",
+      "https://media.tenor.com/pK7FxN8vQNMAAAAC/super-over.gif"
+    ]
+  }
+}
