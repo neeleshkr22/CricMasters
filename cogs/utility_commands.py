@@ -129,7 +129,7 @@ class UtilityCommands(commands.Cog):
         
         # Admin note
         admin_note = """
-        🔐 **Admins:** Check `ADMIN_GUIDE.md` for admin commands
+        🔐 **Admins:** - admin purpose
         `!cmauction <players> <time>` - Start automated auction
         """
         embed.add_field(name="⚙️ Administration", value=admin_note, inline=False)
