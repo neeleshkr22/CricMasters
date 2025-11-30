@@ -183,15 +183,29 @@ class EconomyCommands(commands.Cog):
         item_data = None
         category = None
         
+        # Economy balancing: ensure fair pack prices and rewards
         for cat, items in SHOP_ITEMS.items():
             if item_id in items:
-                item_data = items[item_id]
+                item_data = items[item_id].copy()
                 category = cat
+                # Adjust pack prices and rewards for fairness
+                if category == 'packs':
+                    # Example: bronze pack is cheapest, diamond is most expensive
+                    if item_id == 'bronze_pack':
+                        item_data['price'] = max(1000, item_data.get('price', 1000))
+                    elif item_id == 'silver_pack':
+                        item_data['price'] = max(5000, item_data.get('price', 5000))
+                    elif item_id == 'gold_pack':
+                        item_data['price'] = max(20000, item_data.get('price', 20000))
+                    elif item_id == 'diamond_pack':
+                        item_data['price'] = max(50000, item_data.get('price', 50000))
                 break
         
         if not item_data:
             await ctx.send("❌ Item not found! Use `cmshop` to see available items.")
             return
+        else:
+            await ctx.send(f"🛒 You selected: {item_data['name']} for {item_data['price']} coins.")
         
         # Check balance
         balance = await db.get_user_balance(ctx.author.id)
@@ -200,6 +214,8 @@ class EconomyCommands(commands.Cog):
         if balance < price:
             await ctx.send(f"❌ Insufficient coins! You need {price:,} coins but have {balance:,}.")
             return
+        else:
+            await ctx.send(f"💰 Purchase successful! {price} coins deducted.")
         
         # Process purchase
         success = await db.remove_coins(ctx.author.id, price, f"Bought {item_data['name']}")
@@ -239,31 +255,37 @@ class EconomyCommands(commands.Cog):
             # Open pack immediately
             players = await self.generate_pack_contents(item_data)
             await db.add_item_to_inventory(ctx.author.id, 'players', {'players': players})
-            
+
             # Add players to user's team subs
             user_team = await db.get_user_team(ctx.author.id)
             player_ids = [p['id'] for p in players]
-            
+
             if user_team:
                 current_players = user_team.get('players', [])
-                
                 # Add new players to subs (max 20 total squad size)
                 new_squad = current_players + player_ids
                 if len(new_squad) > 20:
                     new_squad = new_squad[:20]  # Cap at 20
-                
                 await db.update_user_team(ctx.author.id, new_squad, user_team.get('budget_remaining', 0))
+
+                # Check and auto-fill Playing XI if empty
+                playing_xi = await db.get_playing_xi(ctx.author.id)
+                if not playing_xi or len(playing_xi) == 0:
+                    # Add up to 11 new cards to Playing XI
+                    await db.set_playing_xi(ctx.author.id, player_ids[:11])
             else:
                 # Create new team with these players if user doesn't have one
                 team_name = f"{ctx.author.name}'s Team"
                 await db.create_user_team(ctx.author.id, team_name, player_ids[:20])
-            
+                # Also set Playing XI if team is new
+                await db.set_playing_xi(ctx.author.id, player_ids[:11])
+
             embed = discord.Embed(
                 title="📦 Pack Opened!",
                 description=f"You opened a **{item_data['name']}**!",
                 color=COLORS['gold']
             )
-            
+
             for player in players:
                 rarity_data = PLAYER_RARITIES[player['rarity']]
                 embed.add_field(
@@ -271,13 +293,13 @@ class EconomyCommands(commands.Cog):
                     value=f"{player['role'].title()} | {player['country']}\nBAT: {player['batting']} | BOWL: {player['bowling']}",
                     inline=True
                 )
-            
+
             embed.add_field(
                 name="✅ Added to Team",
                 value="Players added to your squad!\nUse `!cmteam` to view your team.\nUse `!cmsetxi` to set your playing XI.\nUse `!cmswap` to swap players.",
                 inline=False
             )
-            
+
             embed.set_footer(text=f"New balance: {balance - price:,} coins")
         
         await ctx.send(embed=embed)
@@ -290,12 +312,12 @@ class EconomyCommands(commands.Cog):
         num_players = 1
         pack_rarity = pack_data['rarity']
         
-        # Rarity weights based on pack type (much harder to get legendary from bronze/silver)
+        # Improved rarity weights for fair progression
         rarity_weights = {
-            'common': {'common': 94, 'rare': 5, 'epic': 0.9, 'legendary': 0.1},
-            'rare': {'common': 70, 'rare': 25, 'epic': 4, 'legendary': 1},
-            'epic': {'common': 30, 'rare': 40, 'epic': 25, 'legendary': 5},
-            'legendary': {'common': 10, 'rare': 25, 'epic': 40, 'legendary': 25},
+            'common': {'common': 90, 'rare': 8, 'epic': 1.5, 'legendary': 0.5},
+            'rare': {'common': 60, 'rare': 30, 'epic': 8, 'legendary': 2},
+            'epic': {'common': 20, 'rare': 40, 'epic': 30, 'legendary': 10},
+            'legendary': {'common': 5, 'rare': 20, 'epic': 35, 'legendary': 40},
         }
         
         weights = rarity_weights[pack_rarity]

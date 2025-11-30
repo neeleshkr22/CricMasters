@@ -1,3 +1,4 @@
+import utils.match_commentary as match_commentary
 """
 Admin Commands for Cric Mater Bot
 Powerful moderation and management tools
@@ -15,16 +16,40 @@ from data.players import get_player_by_id, search_players
 from utils.ovr_calculator import calculate_ovr
 from datetime import datetime
 
-
 class AdminCommands(commands.Cog):
     """Admin-only commands"""
-    
+
     def __init__(self, bot):
         self.bot = bot
-    
+
     def is_admin(self, user_id):
         """Check if user is admin"""
         return user_id in ADMIN_IDS
+
+    # Achievement and leaderboard tracking
+    async def update_achievements(self, user_id, stat_type, value):
+        """Update user achievements based on stat_type and value."""
+        # Example: stat_type = 'matches_played', 'coins_earned', 'packs_opened', 'giveaways_won', 'team_created', etc.
+        achievements = await db.db.achievements.find_one({"user_id": str(user_id)})
+        if not achievements:
+            achievements = {"user_id": str(user_id)}
+        achievements[stat_type] = max(value, achievements.get(stat_type, 0))
+        await db.db.achievements.update_one({"user_id": str(user_id)}, {"$set": achievements}, upsert=True)
+
+    async def get_leaderboard(self, stat_type, top_n=10):
+        """Get leaderboard for a given stat_type."""
+        cursor = db.db.achievements.find({stat_type: {"$exists": True}}).sort(stat_type, -1).limit(top_n)
+        return await cursor.to_list(length=top_n)
+
+    async def show_leaderboards(self, ctx):
+        """Show multiple leaderboards for user engagement."""
+        categories = ['matches_played', 'coins_earned', 'packs_opened', 'giveaways_won', 'team_created']
+        embed = discord.Embed(title="Cric Masters Leaderboards", color=COLORS['gold'])
+        for cat in categories:
+            leaderboard = await self.get_leaderboard(cat, top_n=5)
+            lb_text = "\n".join([f"{idx+1}. <@{user['user_id']}> - {user.get(cat, 0)}" for idx, user in enumerate(leaderboard)]) if leaderboard else "No data yet."
+            embed.add_field(name=f"{cat.replace('_', ' ').title()}", value=lb_text, inline=False)
+        await ctx.send(embed=embed)
     
     @commands.command(name='auction')
     @commands.has_permissions(administrator=True)
@@ -293,23 +318,28 @@ class AdminCommands(commands.Cog):
         if not self.is_admin(ctx.author.id):
             await ctx.send("❌ You don't have permission to use this command!")
             return
-        
+
         # Get stats from database
         total_teams = await db.db.teams.count_documents({})
         total_matches = await db.db.matches.count_documents({})
         active_auctions = await db.db.auctions.count_documents({"status": "active"})
         total_economy = await db.db.economy.count_documents({})
-        
+
         embed = discord.Embed(
             title="📊 Database Statistics",
             color=COLORS['info']
         )
-        
+
         embed.add_field(name="👥 Total Teams", value=total_teams, inline=True)
         embed.add_field(name="🎮 Total Matches", value=total_matches, inline=True)
         embed.add_field(name="🎪 Active Auctions", value=active_auctions, inline=True)
         embed.add_field(name="💰 Economy Users", value=total_economy, inline=True)
-        
+
+        # Show leaderboard for matches played
+        leaderboard = await self.get_leaderboard('matches_played', top_n=5)
+        lb_text = "\n".join([f"{idx+1}. <@{user['user_id']}> - {user['matches_played']} matches" for idx, user in enumerate(leaderboard)]) if leaderboard else "No data yet."
+        embed.add_field(name="Top Players (Matches Played)", value=lb_text, inline=False)
+
         await ctx.send(embed=embed)
 
     @commands.command(name='makeadmin')
@@ -387,7 +417,12 @@ class AdminCommands(commands.Cog):
 
                 player = get_player_by_id(selected_id)
 
-        # Clamp requested OVR
+        # Validate and clamp requested OVR
+        try:
+            target_ovr = float(target_ovr)
+        except (TypeError, ValueError):
+            await ctx.send(f"❌ Invalid OVR value: {target_ovr}. Please provide a number.")
+            return
         if target_ovr < 0:
             target_ovr = 0.0
         if target_ovr > 100:
@@ -520,7 +555,12 @@ class AdminCommands(commands.Cog):
 
                 player = get_player_by_id(selected_id)
 
-        # Clamp target value
+        # Validate and clamp target value
+        try:
+            target_value = float(target_value)
+        except (TypeError, ValueError):
+            await ctx.send(f"❌ Invalid stat value: {target_value}. Please provide a number.")
+            return
         if target_value < 0:
             target_value = 0.0
         if target_value > 100:
@@ -1210,6 +1250,7 @@ class AdminCommands(commands.Cog):
         else:
             await ctx.send(f"❌ None of the specified players were found in the database!\nNot found: {', '.join(not_found)}")
     
+
     @commands.command(name='setteam', aliases=['addteam', 'giveteam'])
     @commands.has_permissions(administrator=True)
     async def set_team_for_user(self, ctx, user: discord.Member = None):
@@ -1217,17 +1258,16 @@ class AdminCommands(commands.Cog):
         Set a default playing XI for any user
         Usage: !cmsetteam [@user]
         Example: !cmsetteam @username OR !cmsetteam (to set for yourself)
-        
         This will create a balanced default team with 11 players for the specified user.
         """
         if not self.is_admin(ctx.author.id):
             await ctx.send("❌ You don't have permission to use this command!")
             return
-        
+
         # If no user specified, set team for command author
         target_user = user or ctx.author
         user_id = str(target_user.id)
-        
+
         # Create default playing XI (11 players) - REAL CRICKET PLAYERS
         default_xi = [
             'bat_0001', 'bat_0002', 'bat_0003', 'bat_0004',  # 4 Batsmen (Kohli, Rohit, Gill, Rahul)
@@ -1235,7 +1275,7 @@ class AdminCommands(commands.Cog):
             'ar_0001', 'ar_0002',  # 2 All-rounders (Hardik, Jadeja)
             'wk_0001'  # 1 Wicket-keeper (Rishabh Pant)
         ]
-        
+
         # Create full squad (20 players: 11 playing + 9 substitutes)
         full_squad = [
             'bat_0001', 'bat_0002', 'bat_0003', 'bat_0004',  # 4 Batsmen
@@ -1248,18 +1288,33 @@ class AdminCommands(commands.Cog):
             'ar_0003', 'ar_0004',  # 2 extra all-rounders (Ashwin, Axar)
             'wk_0002', 'wk_0003', 'bat_0007'  # 1 extra WK + 2 more batsmen
         ]
-        
+
+        # Prevent duplicate players in XI and squad
+        unique_xi = list(dict.fromkeys(default_xi))
+        unique_squad = list(dict.fromkeys(full_squad))
         # Set the playing XI in database
-        await db.set_playing_xi(int(user_id), default_xi)
-        
+        await db.set_playing_xi(int(user_id), unique_xi)
+
         # Also create a default team if doesn't exist
         team_name = f"Team {user_id[:4]}"
         user_team = await db.get_user_team(int(user_id))
-        
+
+        # Sync inventory: add all owned player cards to squad if not present
+        inventory_items = await db.get_user_inventory(int(user_id))
+        owned_player_ids = set()
+        for item in inventory_items:
+            if item.get('item_id') == 'players':
+                owned_player_ids.update(p['id'] for p in item.get('data', {}).get('players', []))
+        # Merge owned players with squad
+        merged_squad = list(dict.fromkeys(unique_squad + list(owned_player_ids)))
+
         if not user_team:
-            # Create team with 20 players
-            await db.create_user_team(int(user_id), team_name, full_squad)
-        
+            # Create team with all owned players
+            await db.create_user_team(int(user_id), team_name, merged_squad)
+
+        # Update achievements for user
+        await self.update_achievements(user_id, 'team_created', 1)
+
         # Get player names for display
         from data.players import get_player_by_id
         xi_display = []
@@ -1269,34 +1324,34 @@ class AdminCommands(commands.Cog):
                 role_emoji = {"batsman": "🏏", "bowler": "⚾", "all_rounder": "⚡", "wicket_keeper": "🧤"}
                 emoji = role_emoji.get(player['role'], "👤")
                 xi_display.append(f"{emoji} {player['name']} ({player['country']})")
-        
+
         embed = discord.Embed(
             title="✅ Team Created Successfully!",
             description=f"Playing XI has been set for {target_user.mention}",
             color=COLORS['success']
         )
         embed.set_thumbnail(url=target_user.display_avatar.url)
-        
+
         embed.add_field(
             name="🏏 Playing XI (11 Players)",
             value="\n".join(xi_display),
             inline=False
         )
-        
+
         embed.add_field(
             name="📊 Team Composition",
             value="**Playing XI:** 4 Batsmen • 4 Bowlers • 2 All-Rounders • 1 Wicket-Keeper\n**Substitutes:** 9 players on bench",
             inline=False
         )
-        
+
         embed.add_field(
             name="📦 Squad Details",
             value=f"**Total Squad:** 20 players\n**Playing XI:** 11 players\n**Substitutes:** 9 players\n\nUse `!cmsubs` to view substitute players",
             inline=False
         )
-        
+
         embed.set_footer(text=f"User can now play matches with this team!")
-        
+
         await ctx.send(embed=embed)
 
 
