@@ -92,22 +92,24 @@ class EngagementCommands(commands.Cog):
         all_players = get_all_players()
         
         # Determine rarity first (harder to get better cards)
+        # For free hourly claims we bias heavily towards lower-OVR (common) cards
         rarity_roll = random.randint(1, 1000)
-        if rarity_roll <= 700:  # 70%
+        # New weights: common 88%, rare 9%, epic 2.5%, legendary 0.5%
+        if rarity_roll <= 880:  # 88%
             rarity = 'common'
-            # Filter players with OVR 60-79
-            eligible_players = [p for p in all_players if 60 <= calculate_ovr(p) < 80]
-        elif rarity_roll <= 900:  # 20%
+            # Favor lower OVR players for free claims: 50-74
+            eligible_players = [p for p in all_players if 50 <= calculate_ovr(p) < 75]
+        elif rarity_roll <= 970:  # 9%
             rarity = 'rare'
-            # Filter players with OVR 80-84
-            eligible_players = [p for p in all_players if 80 <= calculate_ovr(p) < 85]
-        elif rarity_roll <= 980:  # 8%
+            # Slightly broader rare range: 75-84
+            eligible_players = [p for p in all_players if 75 <= calculate_ovr(p) < 85]
+        elif rarity_roll <= 995:  # 2.5%
             rarity = 'epic'
-            # Filter players with OVR 85-89
+            # Epic players: 85-89
             eligible_players = [p for p in all_players if 85 <= calculate_ovr(p) < 90]
-        else:  # 2%
+        else:  # 0.5%
             rarity = 'legendary'
-            # Filter top players with OVR 90+
+            # Legendary remains very rare: 90+
             eligible_players = [p for p in all_players if calculate_ovr(p) >= 90]
         
         # If no eligible players in rarity tier, fallback to all players
@@ -341,7 +343,7 @@ class EngagementCommands(commands.Cog):
             await ctx.send(embed=embed)
 
 
-    @commands.command(name='cd', aliases=['cooldown', 'cooldowns'])
+    @commands.command(name='cd', aliases=['cooldown', 'cooldowns', 'cmcd'])
     async def check_cooldowns(self, ctx):
         """
         Check cooldowns for all time-gated commands
@@ -365,15 +367,21 @@ class EngagementCommands(commands.Cog):
         
         cooldowns = []
         
+        # Helper to format remaining seconds to HH:MM:SS and ready time
+        def format_remaining(seconds_left: int):
+            hours = seconds_left // 3600
+            minutes = (seconds_left % 3600) // 60
+            seconds = seconds_left % 60
+            ready_at = current_time + timedelta(seconds=seconds_left)
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d} (Ready at {ready_at.strftime('%Y-%m-%d %H:%M:%S')} UTC)"
+
         # 1. Claim cooldown (1 hour)
         last_claim = user_data.get('last_claim')
         if last_claim:
             time_diff = current_time - last_claim
             if time_diff.total_seconds() < 3600:
                 seconds_left = 3600 - int(time_diff.total_seconds())
-                minutes_left = seconds_left // 60
-                seconds = seconds_left % 60
-                cooldowns.append(("💰 Claim", f"in {minutes_left}m {seconds}s", False))
+                cooldowns.append(("💰 Claim", format_remaining(seconds_left), False))
             else:
                 cooldowns.append(("💰 Claim", "✅ Ready", True))
         else:
@@ -385,9 +393,7 @@ class EngagementCommands(commands.Cog):
             time_diff = current_time - last_pack
             if time_diff.total_seconds() < 86400:
                 seconds_left = 86400 - int(time_diff.total_seconds())
-                hours_left = seconds_left // 3600
-                minutes_left = (seconds_left % 3600) // 60
-                cooldowns.append(("🎁 Daily Pack", f"in {hours_left}h {minutes_left}m", False))
+                cooldowns.append(("🎁 Daily Pack", format_remaining(seconds_left), False))
             else:
                 cooldowns.append(("🎁 Daily Pack", "✅ Ready", True))
         else:
