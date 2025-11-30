@@ -373,6 +373,8 @@ class ProfessionalMatchEngine:
         
         # Current bowler
         self.current_bowler_id = None
+        # Last over's bowler (to prevent consecutive overs)
+        self.last_bowler_id = None
         
         # Available batsmen (not yet out)
         self.available_batsmen = batting_xi.copy()
@@ -525,6 +527,7 @@ class ProfessionalMatchEngine:
             await db.connect()
             await db.deduct_coins(self.batting_user_id, 500, "Match forfeit - opener timeout")
             await db.close()
+            await self.forfeit_match(self.batting_user_id, 'opener selection timeout')
             return
         
         # Select non-striker
@@ -548,6 +551,7 @@ class ProfessionalMatchEngine:
             await db.connect()
             await db.deduct_coins(self.batting_user_id, 500, "Match forfeit - non-striker timeout")
             await db.close()
+            await self.forfeit_match(self.batting_user_id, 'non-striker selection timeout')
             return
     
     async def select_new_batsman(self):
@@ -572,7 +576,8 @@ class ProfessionalMatchEngine:
             await db.connect()
             await db.deduct_coins(self.batting_user_id, 500, "Match forfeit - batsman selection timeout")
             await db.close()
-            # Match ends here, wickets = 10 will end the loop
+            await self.forfeit_match(self.batting_user_id, 'new batsman selection timeout')
+            # Mark all out to stop the innings loop
             self.wickets = 10
     
     async def select_bowler(self):
@@ -587,8 +592,54 @@ class ProfessionalMatchEngine:
         
         async def callback(interaction, selected_bowler):
             self.current_bowler_id = selected_bowler
-        
-        view = BowlerSelectView(self.bowling_user_id, self.bowling_xi, callback)
+
+        # Enforce bowling rotation: bowler who bowled previous over cannot bowl the immediately next over
+        # and enforce per-format max overs (T20: 4 overs, ODI: 10 overs)
+        if self.overs <= 20:
+            per_bowler_limit = 4
+        elif self.overs >= 50:
+            per_bowler_limit = 10
+        else:
+            # default conservative limit for other match lengths
+            per_bowler_limit = max(1, self.overs // 5)
+
+        # Build allowed bowlers list
+        allowed_bowlers = []
+        excluded_reasons = {}
+        for player_id in self.bowling_xi:
+            # Skip last over bowler
+            if self.last_bowler_id and player_id == self.last_bowler_id:
+                excluded_reasons[player_id] = 'previous_over'
+                continue
+
+            stats = self.tracker.get_bowler_stats(player_id) or {}
+            bowled_overs = stats.get('overs', 0)
+            # If bowled_overs is float like 1.0, compare directly
+            if bowled_overs >= per_bowler_limit:
+                excluded_reasons[player_id] = 'limit_reached'
+                continue
+
+            allowed_bowlers.append(player_id)
+
+        # If no allowed bowlers due to strict rules, relax the no-consecutive constraint
+        if not allowed_bowlers:
+            # Allow everyone except those who have strictly reached limit
+            fallback = []
+            for player_id in self.bowling_xi:
+                stats = self.tracker.get_bowler_stats(player_id) or {}
+                if stats.get('overs', 0) >= per_bowler_limit:
+                    excluded_reasons[player_id] = 'limit_reached'
+                    continue
+                fallback.append(player_id)
+
+            if fallback:
+                allowed_bowlers = fallback
+            else:
+                # As last resort, allow all (prevents deadlock)
+                allowed_bowlers = self.bowling_xi.copy()
+
+        # Build view with only allowed bowlers
+        view = BowlerSelectView(self.bowling_user_id, allowed_bowlers, callback)
         
         msg = await self.channel.send(embed=prompt_embed, view=view)
         await view.wait()
@@ -653,6 +704,7 @@ class ProfessionalMatchEngine:
                     await db.connect()
                     await db.deduct_coins(self.bowling_user_id, 500, "Match forfeit - pace selection timeout")
                     await db.close()
+                    await self.forfeit_match(self.bowling_user_id, 'pace selection timeout')
                     return
                 
                 # Step 2: Select length (edit same message)
@@ -679,10 +731,19 @@ class ProfessionalMatchEngine:
                 await db.connect()
                 await db.deduct_coins(self.bowling_user_id, 500, "Match forfeit - delivery selection timeout")
                 await db.close()
+                await self.forfeit_match(self.bowling_user_id, 'delivery selection timeout')
                 return
             
             commentary = f"{bowler['name']}: {bowl_type_choice} at {ball_speed} kmph"
             logger.debug(f"Commentary: {commentary}")
+
+            # Informational broadcast: announce the delivery immediately so the opponent
+            # knows the ball has been bowled before the shot selection prompt appears.
+            try:
+                await self.channel.send(f"⚾ {bowler['name']} bowls: **{bowl_type_choice}** ({ball_speed} kmph)")
+            except Exception:
+                # Non-fatal: log and continue if the message cannot be sent
+                logger.debug("Failed to send immediate delivery announcement")
             
             # Shot selection (removed scorecard display for faster flow)
             shot_choice = None
@@ -713,6 +774,7 @@ class ProfessionalMatchEngine:
                 await db.connect()
                 await db.deduct_coins(self.batting_user_id, 500, "Match forfeit - shot selection timeout")
                 await db.close()
+                await self.forfeit_match(self.batting_user_id, 'shot selection timeout')
                 return
             
             # Calculate outcome
@@ -748,6 +810,15 @@ class ProfessionalMatchEngine:
                              outcome if outcome != 'wicket' and outcome != 'dot' else 0,
                              outcome if outcome == 'wicket' or outcome == 'dot' else outcome,
                              shot)
+
+        # If the over completed with this ball, mark last bowler and clear current bowler
+        if self.balls % 6 == 0:
+            try:
+                self.last_bowler_id = self.current_bowler_id
+            except Exception:
+                self.last_bowler_id = None
+            # Clearing current bowler so select_bowler will trigger next over selection
+            self.current_bowler_id = None
         
         # Handle outcome
         if outcome == 'wicket':
@@ -1183,3 +1254,59 @@ class ProfessionalMatchEngine:
             logger.error(f"Error saving match history: {e}")
         finally:
             await db.close()
+
+    async def forfeit_match(self, forfeiter_id, reason="forfeit"):
+        """Handle match forfeit: record opponent as winner and save result"""
+        try:
+            # Determine winner and loser
+            forfeiter_id = str(forfeiter_id)
+            if forfeiter_id == str(self.batting_user_id):
+                winner_id = str(self.bowling_user_id)
+                loser_id = str(self.batting_user_id)
+                winner = self.bowling_user
+                loser = self.batting_user
+            else:
+                winner_id = str(self.batting_user_id)
+                loser_id = str(self.bowling_user_id)
+                winner = self.batting_user
+                loser = self.bowling_user
+
+            # Announce result
+            await self.channel.send(f"❌ Match ended due to forfeit ({reason}). {winner.mention} is declared the winner!")
+
+            # Prepare match data (minimal)
+            match_data = {
+                "team1_user": str(self.batting_user_id),
+                "team1_name": self.batting_user.name,
+                "team1_score": f"{self.runs}/{self.wickets}",
+                "team1_overs": f"{(self.balls // 6)}.{self.balls % 6}",
+                "team2_user": str(self.bowling_user_id),
+                "team2_name": self.bowling_user.name,
+                "team2_score": f"{self.target - 1}/{10}",
+                "team2_overs": f"{self.overs}.0",
+                "winner_id": winner_id,
+                "winner_name": winner.name,
+                "win_by": f"Forfeit ({reason})",
+                "venue": self.venue,
+                "overs": self.overs,
+                "match_type": f"{self.overs}-over match",
+                "created_at": datetime.utcnow()
+            }
+
+            db = Database()
+            await db.connect()
+            await db.save_match(match_data)
+
+            # Update records and award coins
+            await db.update_match_result(winner_id, won=True)
+            await db.update_match_result(loser_id, won=False)
+            await db.award_match_coins(winner_id, 5000, "Match victory (forfeit)")
+            await db.award_match_coins(loser_id, 1000, "Participation reward (forfeit)")
+            await db.close()
+
+            # Mark match ended so loops break
+            self.wickets = 10
+            self.balls = self.max_balls
+
+        except Exception as e:
+            logger.error(f"Error handling forfeit: {e}")
