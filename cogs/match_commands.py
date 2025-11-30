@@ -286,10 +286,21 @@ class MatchCommands(commands.Cog):
             batting_team_name = batting_team_data.get('team_name') if batting_team_data else None
             bowling_team_name = bowling_team_data.get('team_name') if bowling_team_data else None
             
+            # Require both sides to have a full Playing XI of at least 11 players.
+            # Previously the engine would substitute default XIs; enforce real teams instead.
             if not batting_xi or len(batting_xi) < 11:
-                batting_xi = ['bat_0001', 'bat_0002', 'bat_0003', 'bat_0004', 'bowl_0001', 'bowl_0002', 'bowl_0003', 'ar_0001', 'ar_0002', 'wk_0001', 'wk_0002']
+                await channel.send(
+                    f"❌ Cannot start match: batting side (<@{batting_user_id}>) must have at least 11 players in their Playing XI."
+                    " Use `!cmselectteam` to set your XI or add players to your team."
+                )
+                return
+
             if not bowling_xi or len(bowling_xi) < 11:
-                bowling_xi = ['bat_0005', 'bat_0006', 'bat_0007', 'bat_0008', 'bowl_0004', 'bowl_0005', 'bowl_0006', 'ar_0003', 'ar_0004', 'wk_0003', 'wk_0004']
+                await channel.send(
+                    f"❌ Cannot start match: bowling side (<@{bowling_user_id}>) must have at least 11 players in their Playing XI."
+                    " Use `!cmselectteam` to set your XI or add players to your team."
+                )
+                return
             
             await channel.send(f"✅ Teams loaded! Starting {overs} over match...")
             
