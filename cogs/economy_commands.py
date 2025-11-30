@@ -286,7 +286,8 @@ class EconomyCommands(commands.Cog):
         """Generate random players for a pack based on OVR"""
         from utils.ovr_calculator import calculate_ovr
         all_players = get_all_players()
-        num_players = pack_data['players']
+        # Per new economy rules, each purchased/opened pack yields exactly ONE player card
+        num_players = 1
         pack_rarity = pack_data['rarity']
         
         # Rarity weights based on pack type (much harder to get legendary from bronze/silver)
