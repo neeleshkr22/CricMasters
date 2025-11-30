@@ -8,6 +8,7 @@ import sys
 
 from config import DISCORD_TOKEN
 from database.db import db
+from data.players import get_player_by_id
 
 
 # Bot setup
@@ -26,6 +27,21 @@ async def on_ready():
     
     # Connect to database
     await db.connect()
+    # Load any admin-created player overrides so they persist across restarts
+    try:
+        overrides = await db.db.player_overrides.find({}).to_list(length=None)
+        if overrides:
+            print(f"🔧 Applying {len(overrides)} player overrides from DB")
+            for o in overrides:
+                pid = o.get('player_id')
+                player = get_player_by_id(pid)
+                if player:
+                    if 'batting' in o:
+                        player['batting'] = int(o['batting'])
+                    if 'bowling' in o:
+                        player['bowling'] = int(o['bowling'])
+    except Exception as e:
+        print(f"⚠️ Failed to load player overrides: {e}")
     
     # Load cogs
     await load_cogs()
