@@ -5,11 +5,15 @@ Powerful moderation and management tools
 import discord
 from discord.ext import commands
 import random
+import asyncio
 from datetime import datetime, timedelta
 
 from config import ADMIN_IDS, COLORS, AUCTION_SETTINGS, ECONOMY_SETTINGS
 from database.db import db
 from data.players import get_all_players
+from data.players import get_player_by_id, search_players
+from utils.ovr_calculator import calculate_ovr
+from datetime import datetime
 
 
 class AdminCommands(commands.Cog):
@@ -307,6 +311,275 @@ class AdminCommands(commands.Cog):
         embed.add_field(name="💰 Economy Users", value=total_economy, inline=True)
         
         await ctx.send(embed=embed)
+
+    @commands.command(name='makeadmin')
+    @commands.has_permissions(administrator=True)
+    async def make_admin(self, ctx, member: discord.Member):
+        """
+        Grant bot-admin privileges (stored in DB)
+        Usage: cmmakeadmin @user
+        """
+        # Only server admins can run this command (decorator enforced)
+        if member.bot:
+            await ctx.send("❌ Cannot grant admin to bots!")
+            return
+
+        # Upsert into admins collection
+        await db.db.admins.update_one(
+            {"user_id": str(member.id)},
+            {"$set": {"user_id": str(member.id), "granted_by": str(ctx.author.id), "granted_at": datetime.utcnow()}},
+            upsert=True
+        )
+
+        await ctx.send(f"✅ {member.mention} has been granted bot admin privileges.")
+
+    @commands.command(name='setplayerovr')
+    @commands.has_permissions(administrator=True)
+    async def set_player_ovr(self, ctx, player_query: str, target_ovr: float):
+        """
+        Set a player's OVR by adjusting underlying stats proportionally.
+        Usage: cmsetplayerovr <player_id_or_name> <ovr>
+        Example: cmsetplayerovr bat_0001 92.5
+        """
+        # Find player by id first, else search by name
+        player = get_player_by_id(player_query)
+        if not player:
+            results = search_players(player_query)
+            if len(results) == 0:
+                await ctx.send(f"❌ Player '{player_query}' not found.")
+                return
+
+            if len(results) == 1:
+                player = results[0]
+            else:
+                # Present a selection UI to disambiguate multiple matches
+                options = []
+                for p in results[:25]:
+                    label = p['name'][:100]
+                    description = f"{p.get('role','')[:50]} • OVR:{calculate_ovr(p):.1f}"
+                    options.append(discord.SelectOption(label=label, value=p['id'], description=description))
+
+                class _PlayerSelect(discord.ui.Select):
+                    def __init__(self):
+                        super().__init__(placeholder='Select the player to modify', min_values=1, max_values=1, options=options)
+
+                    async def callback(self, interaction: discord.Interaction):
+                        selected_id = self.values[0]
+                        # store selection on the view for the outer scope to pick up
+                        self.view.selected_id = selected_id
+                        for child in self.view.children:
+                            child.disabled = True
+                        await interaction.message.edit(view=self.view)
+                        await interaction.response.send_message(f"✅ Selected player `{selected_id}`.", ephemeral=True)
+
+                view = discord.ui.View(timeout=30)
+                view.add_item(_PlayerSelect())
+
+                prompt = await ctx.send("Multiple players matched your query. Please select the correct player:", view=view)
+
+                # Wait for selection
+                await view.wait()
+
+                selected_id = getattr(view, 'selected_id', None)
+                if not selected_id:
+                    await ctx.send("❌ No selection made — command cancelled.")
+                    return
+
+                player = get_player_by_id(selected_id)
+
+        # Clamp requested OVR
+        if target_ovr < 0:
+            target_ovr = 0.0
+        if target_ovr > 100:
+            target_ovr = 100.0
+
+        # Determine weights based on role (must match ovr_calculator)
+        role = player.get('role', 'batsman')
+        if role == 'batsman':
+            w_bat, w_bowl = 0.80, 0.20
+        elif role == 'bowler':
+            w_bat, w_bowl = 0.20, 0.80
+        elif role == 'all_rounder':
+            w_bat, w_bowl = 0.50, 0.50
+        elif role == 'wicket_keeper':
+            w_bat, w_bowl = 0.75, 0.25
+        else:
+            w_bat, w_bowl = 0.50, 0.50
+
+        # Current bowling and batting
+        cur_bat = float(player.get('batting', 0))
+        cur_bowl = float(player.get('bowling', 0))
+
+        # Solve for new batting while keeping bowling same: target = w_bat*bat + w_bowl*bowl
+        # bat_required = (target - w_bowl*bowl) / w_bat
+        required_bat = (target_ovr - (w_bowl * cur_bowl)) / w_bat if w_bat > 0 else cur_bat
+
+        # Clamp to 0-100 and round
+        new_bat = max(0, min(100, int(round(required_bat))))
+
+        # If new_bat is unchanged (or unrealistic), try adjusting bowling instead
+        if new_bat == int(cur_bat):
+            # Solve for bowling keeping batting same
+            required_bowl = (target_ovr - (w_bat * cur_bat)) / w_bowl if w_bowl > 0 else cur_bowl
+            new_bowl = max(0, min(100, int(round(required_bowl))))
+            # Apply bowling change
+            player['bowling'] = new_bowl
+        else:
+            # Apply batting change
+            player['batting'] = new_bat
+
+        # Persist override to DB so it survives restarts
+        await db.db.player_overrides.update_one(
+            {"player_id": player['id']},
+            {"$set": {
+                "player_id": player['id'],
+                "batting": int(player['batting']),
+                "bowling": int(player['bowling']),
+                "set_by": str(ctx.author.id),
+                "set_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+
+        # Report change
+        new_ovr = calculate_ovr(player)
+        await ctx.send(f"✅ Updated **{player['name']}** — BAT: {player['batting']} | BOWL: {player['bowling']} • OVR: {new_ovr}")
+
+    @commands.command(name='setovr')
+    @commands.has_permissions(administrator=True)
+    async def set_ovr(self, ctx, mode: str, target_value: float, *player_query: str):
+        """
+        Flexible OVR/stats setter.
+        Usage: cmsetovr <bat|bowl|ovr> <value> <player name or id>
+        Examples:
+            cmsetovr bowl 98 bumrah
+            cmsetovr bat 90 kohli
+            cmsetovr ovr 95 bumrah
+        """
+        if not self.is_admin(ctx.author.id):
+            await ctx.send("❌ You don't have permission to use this command!")
+            return
+
+        mode = mode.lower()
+        if mode in ('bat', 'batting'):
+            target_field = 'bat'
+        elif mode in ('bowl', 'bowling'):
+            target_field = 'bowl'
+        elif mode in ('ovr', 'overall'):
+            target_field = 'ovr'
+        else:
+            await ctx.send("❌ Invalid mode! Use `bat`, `bowl`, or `ovr`.")
+            return
+
+        if not player_query:
+            await ctx.send("❌ Please specify the player name or id.")
+            return
+
+        player_q = " ".join(player_query)
+
+        # Find player
+        player = get_player_by_id(player_q)
+        if not player:
+            results = search_players(player_q)
+            if len(results) == 0:
+                await ctx.send(f"❌ Player '{player_q}' not found.")
+                return
+
+            if len(results) == 1:
+                player = results[0]
+            else:
+                # Disambiguate
+                options = []
+                for p in results[:25]:
+                    label = p['name'][:100]
+                    description = f"{p.get('role','')[:50]} • OVR:{calculate_ovr(p):.1f}"
+                    options.append(discord.SelectOption(label=label, value=p['id'], description=description))
+
+                class _PlayerSelect(discord.ui.Select):
+                    def __init__(self):
+                        super().__init__(placeholder='Select the player to modify', min_values=1, max_values=1, options=options)
+
+                    async def callback(self, interaction: discord.Interaction):
+                        selected_id = self.values[0]
+                        self.view.selected_id = selected_id
+                        for child in self.view.children:
+                            child.disabled = True
+                        await interaction.message.edit(view=self.view)
+                        await interaction.response.send_message(f"✅ Selected player `{selected_id}`.", ephemeral=True)
+
+                view = discord.ui.View(timeout=30)
+                view.add_item(_PlayerSelect())
+
+                prompt = await ctx.send("Multiple players matched your query. Please select the correct player:", view=view)
+                await view.wait()
+
+                selected_id = getattr(view, 'selected_id', None)
+                if not selected_id:
+                    await ctx.send("❌ No selection made — command cancelled.")
+                    return
+
+                player = get_player_by_id(selected_id)
+
+        # Clamp target value
+        if target_value < 0:
+            target_value = 0.0
+        if target_value > 100:
+            target_value = 100.0
+
+        # Apply changes
+        cur_bat = float(player.get('batting', 0))
+        cur_bowl = float(player.get('bowling', 0))
+        role = player.get('role', 'batsman')
+
+        # Weights used in ovr calculation (should match ovr_calculator)
+        if role == 'batsman':
+            w_bat, w_bowl = 0.80, 0.20
+        elif role == 'bowler':
+            w_bat, w_bowl = 0.20, 0.80
+        elif role == 'all_rounder':
+            w_bat, w_bowl = 0.50, 0.50
+        elif role == 'wicket_keeper':
+            w_bat, w_bowl = 0.75, 0.25
+        else:
+            w_bat, w_bowl = 0.50, 0.50
+
+        # Prepare new stat values
+        new_bat = int(round(cur_bat))
+        new_bowl = int(round(cur_bowl))
+
+        if target_field == 'bat':
+            new_bat = max(0, min(100, int(round(target_value))))
+        elif target_field == 'bowl':
+            new_bowl = max(0, min(100, int(round(target_value))))
+        else:  # overall
+            # Try adjusting batting first keeping bowling same
+            required_bat = (target_value - (w_bowl * cur_bowl)) / w_bat if w_bat > 0 else cur_bat
+            new_bat_candidate = max(0, min(100, int(round(required_bat))))
+            if new_bat_candidate != int(cur_bat):
+                new_bat = new_bat_candidate
+            else:
+                # adjust bowling instead
+                required_bowl = (target_value - (w_bat * cur_bat)) / w_bowl if w_bowl > 0 else cur_bowl
+                new_bowl = max(0, min(100, int(round(required_bowl))))
+
+        # Persist to DB override
+        await db.db.player_overrides.update_one(
+            {"player_id": player['id']},
+            {"$set": {
+                "player_id": player['id'],
+                "batting": int(new_bat),
+                "bowling": int(new_bowl),
+                "set_by": str(ctx.author.id),
+                "set_at": datetime.utcnow()
+            }},
+            upsert=True
+        )
+
+        # Report
+        player['batting'] = int(new_bat)
+        player['bowling'] = int(new_bowl)
+        new_ovr = calculate_ovr(player)
+        await ctx.send(f"✅ Updated **{player['name']}** — BAT: {player['batting']} | BOWL: {player['bowling']} • OVR: {new_ovr}")
     
     @commands.command(name='givecoins')
     @commands.has_permissions(administrator=True)
@@ -338,18 +611,32 @@ class AdminCommands(commands.Cog):
         
         embed.set_footer(text=f"Admin: {ctx.author.display_name}")
         await ctx.send(embed=embed)
+
+    @commands.command(name='revertplayerovr')
+    @commands.has_permissions(administrator=True)
+    async def revert_player_ovr(self, ctx, player_query: str):
+        """
+        Revert any persistent OVR override for a player
+        Usage: cmrevertplayerovr <player_id_or_name>
+        """
+        # Find player by id first, else search by name
+        player = get_player_by_id(player_query)
+        if not player:
+            results = search_players(player_query)
+            if len(results) == 0:
+                await ctx.send(f"❌ Player '{player_query}' not found.")
+                return
+            player = results[0]
+
+        # Remove override from DB
+        result = await db.db.player_overrides.delete_one({"player_id": player['id']})
+
+        if result.deleted_count > 0:
+            await ctx.send(f"✅ Removed persistent override for **{player['name']}**. Restart the bot or reload players to apply baseline stats.")
+        else:
+            await ctx.send(f"⚠️ No persistent override found for **{player['name']}**.")
         
-        # DM the user
-        try:
-            dm = await member.create_dm()
-            dm_embed = discord.Embed(
-                title="🎁 You Received Coins!",
-                description=f"An admin gave you **{amount:,} coins**!",
-                color=COLORS['gold']
-            )
-            await dm.send(embed=dm_embed)
-        except:
-            pass
+        # No automatic DM required for revert; admin will be notified here.
     
     @commands.command(name='removecoins')
     @commands.has_permissions(administrator=True)
@@ -509,18 +796,19 @@ class AdminCommands(commands.Cog):
         if pack:
             pack_lower = pack.lower()
             valid_packs = ['bronze_pack', 'silver_pack', 'gold_pack', 'diamond_pack']
-            
+
             if pack_lower in valid_packs:
                 from cogs.economy_commands import EconomyCommands
                 eco_cog = EconomyCommands(self.bot)
-                
+
+                # Admin prize packs now also follow the one-card-per-pack rule
                 pack_data = {
-                    'bronze_pack': {'name': 'Bronze Pack', 'players': 3, 'rarity': 'common'},
-                    'silver_pack': {'name': 'Silver Pack', 'players': 5, 'rarity': 'rare'},
-                    'gold_pack': {'name': 'Gold Pack', 'players': 5, 'rarity': 'epic'},
-                    'diamond_pack': {'name': 'Diamond Pack', 'players': 5, 'rarity': 'legendary'},
+                    'bronze_pack': {'name': 'Bronze Pack', 'players': 1, 'rarity': 'common'},
+                    'silver_pack': {'name': 'Silver Pack', 'players': 1, 'rarity': 'rare'},
+                    'gold_pack': {'name': 'Gold Pack', 'players': 1, 'rarity': 'epic'},
+                    'diamond_pack': {'name': 'Diamond Pack', 'players': 1, 'rarity': 'legendary'},
                 }[pack_lower]
-                
+
                 players = await eco_cog.generate_pack_contents(pack_data)
                 await db.add_item_to_inventory(member.id, 'players', {'players': players})
                 pack_given = pack_data['name']
@@ -1055,40 +1343,220 @@ class AdminCommands(commands.Cog):
                     except:
                         pass
                 
-                embed.set_footer(text=f"Use !cmbid <amount> to bid | Auto-sells in {duration_minutes} min")
-                
-                await ctx.send(embed=embed)
-                
-                # Wait for duration
-                await asyncio.sleep(duration_minutes * 60)
+                # Calculate end timestamp for this player auction
+                from datetime import timedelta
+                end_time = datetime.utcnow() + timedelta(minutes=duration_minutes)
+                end_str = end_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+                embed.set_footer(text=f"Use !cmbid <amount> to bid | Auto-sells at {end_str}")
+
+                msg = await ctx.send(embed=embed)
+
+                # Live update loop: edit the message every few seconds to show remaining time and current bid
+                import math
+                update_interval = 10
+                end_ts = end_time.timestamp()
+
+                while True:
+                    now = datetime.utcnow()
+                    remaining = int(end_ts - now.timestamp())
+                    if remaining <= 0:
+                        break
+
+                    # Refresh auction/player data to show live bid info
+                    try:
+                        auction_live = await db.db.auctions.find_one({"_id": auction_id})
+                        player_live = auction_live['players'][current_index]
+                    except Exception:
+                        player_live = current_player
+
+                    mins, secs = divmod(max(0, remaining), 60)
+                    hours, mins = divmod(mins, 60)
+                    timer_str = f"{hours:02d}:{mins:02d}:{secs:02d}"
+
+                    # Rebuild embed with updated bid and timer
+                    live_embed = discord.Embed(
+                        title=f"🎪 Player #{current_index + 1}/{len(players)}",
+                        description=f"**{player_live['name']}** {player_live['country']}",
+                        color=COLORS['gold']
+                    )
+                    live_embed.add_field(name="Role", value=player_live['role'].replace('_', ' ').title(), inline=True)
+                    live_embed.add_field(name="Batting", value=player_live['batting'], inline=True)
+                    live_embed.add_field(name="Bowling", value=player_live['bowling'], inline=True)
+                    live_embed.add_field(name="💰 Base Price", value=f"${player_live['base_price']:,}", inline=False)
+                    live_embed.add_field(name="💵 Current Bid", value=f"${player_live.get('current_bid', 0):,}", inline=True)
+
+                    hb = player_live.get('highest_bidder')
+                    if hb:
+                        try:
+                            user = await self.bot.fetch_user(int(hb))
+                            live_embed.add_field(name="🏆 Highest Bidder", value=user.mention, inline=True)
+                        except:
+                            pass
+
+                    live_embed.set_footer(text=f"Auto-sells in {timer_str} | Ends at {end_str}")
+
+                    try:
+                        await msg.edit(embed=live_embed)
+                    except Exception:
+                        pass
+
+                    # Sleep until next update or until end
+                    await asyncio.sleep(min(update_interval, max(1, remaining)))
                 
                 # Award player to highest bidder
                 auction = await db.db.auctions.find_one({"_id": auction_id})
                 current_player = auction['players'][current_index]
                 
+                # Re-fetch auction/player after countdown
+                auction = await db.db.auctions.find_one({"_id": auction_id})
+                current_player = auction['players'][current_index]
+
                 if current_player.get('highest_bidder'):
                     # Award player
                     winner_id = current_player['highest_bidder']
                     winning_bid = current_player.get('current_bid', 0)
-                    
-                    # Add player to winner's team
+
+                    # Add player to winner's team if they have room (max 20 players)
                     user_team = await db.get_user_team(winner_id)
+                    added_to_team = False
+
                     if user_team:
                         current_players = user_team.get('players', [])
-                        current_players.append(current_player['id'])
-                        await db.update_user_team(winner_id, current_players, user_team.get('budget_remaining', 0) - winning_bid)
+                        if len(current_players) < 20:
+                            current_players.append(current_player['id'])
+                            await db.update_user_team(winner_id, current_players, max(0, user_team.get('budget_remaining', 0) - winning_bid))
+                            added_to_team = True
+                        else:
+                            # Team full: ask winner whether to Swap or Keep in inventory
+                            added_to_team = False
+
+                            try:
+                                winner_user = await self.bot.fetch_user(int(winner_id))
+                                prompt_channel = None
+                                try:
+                                    # Prefer DM
+                                    dm = await winner_user.create_dm()
+                                    prompt_channel = dm
+                                except:
+                                    prompt_channel = ctx.channel
+
+                                # Build swap/keep view
+                                class SwapDecisionView(discord.ui.View):
+                                    def __init__(self, timeout=60):
+                                        super().__init__(timeout=timeout)
+                                        self.choice = None
+
+                                    @discord.ui.button(label='Swap Now', style=discord.ButtonStyle.primary)
+                                    async def swap(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                        if interaction.user.id != int(winner_id):
+                                            await interaction.response.send_message('Only the auction winner can choose.', ephemeral=True)
+                                            return
+                                        self.choice = 'swap'
+                                        # disable buttons
+                                        for c in self.children:
+                                            c.disabled = True
+                                        await interaction.message.edit(view=self)
+                                        await interaction.response.send_message('✅ Swap selected. Please choose a player to replace.', ephemeral=True)
+
+                                    @discord.ui.button(label='Keep in Inventory', style=discord.ButtonStyle.secondary)
+                                    async def keep(self, interaction: discord.Interaction, button: discord.ui.Button):
+                                        if interaction.user.id != int(winner_id):
+                                            await interaction.response.send_message('Only the auction winner can choose.', ephemeral=True)
+                                            return
+                                        self.choice = 'keep'
+                                        for c in self.children:
+                                            c.disabled = True
+                                        await interaction.message.edit(view=self)
+                                        await interaction.response.send_message('✅ Player will be added to your inventory.', ephemeral=True)
+
+                                prompt_view = SwapDecisionView(timeout=60)
+                                prompt_msg = await prompt_channel.send(
+                                    f"🏷️ {winner_user.mention if prompt_channel is not dm else winner_user.display_name}, your squad is full (20 players). Do you want to swap a player now or keep the new player in your inventory?",
+                                    view=prompt_view
+                                )
+
+                                await prompt_view.wait()
+
+                                choice = prompt_view.choice
+                                if choice == 'swap':
+                                    # Present select of current players to drop
+                                    options = []
+                                    for pid in current_players:
+                                        p = get_player_by_id(pid)
+                                        if p:
+                                            label = p['name'][:100]
+                                            desc = f"{p.get('role','')} • OVR:{calculate_ovr(p):.1f}"
+                                            options.append(discord.SelectOption(label=label, value=pid, description=desc))
+
+                                    class _DropSelect(discord.ui.Select):
+                                        def __init__(self):
+                                            super().__init__(placeholder='Select player to drop', min_values=1, max_values=1, options=options)
+
+                                        async def callback(self, interaction: discord.Interaction):
+                                            if interaction.user.id != int(winner_id):
+                                                await interaction.response.send_message('Only the winner can swap.', ephemeral=True)
+                                                return
+                                            drop_id = self.values[0]
+                                            # perform swap
+                                            new_players = [current_player['id'] if x == drop_id else x for x in current_players]
+                                            await db.update_user_team(winner_id, new_players, max(0, user_team.get('budget_remaining', 0) - winning_bid))
+                                            # notify
+                                            await interaction.response.send_message(f"✅ Swapped `{drop_id}` for `{current_player['id']}`. Player added to your squad.", ephemeral=True)
+                                            # disable view
+                                            for child in self.view.children:
+                                                child.disabled = True
+                                            await interaction.message.edit(view=self.view)
+
+                                    select_view = discord.ui.View(timeout=60)
+                                    select_view.add_item(_DropSelect())
+                                    await prompt_channel.send('Select a player to drop:', view=select_view)
+                                    await select_view.wait()
+                                    # If no selection made, fallback to adding to inventory
+                                    # (the select callback performs the swap)
+                                    if not any(getattr(select_view, 'children', [])):
+                                        await db.add_item_to_inventory(winner_id, 'players', {'players': [current_player]})
+                                else:
+                                    # keep in inventory or no response
+                                    await db.add_item_to_inventory(winner_id, 'players', {'players': [current_player]})
+
+                            except Exception:
+                                # On any failure, add to inventory as fallback
+                                await db.add_item_to_inventory(winner_id, 'players', {'players': [current_player]})
                     else:
-                        # Create team for winner
+                        # Create a new team for winner with this player
                         await db.create_user_team(winner_id, f"Team {winner_id}", [current_player['id']])
-                    
+                        added_to_team = True
+
+                    # Deduct winning bid from auction participant budget (if participant exists)
+                    try:
+                        # Find participant and decrement their auction budget
+                        for p in auction.get('participants', []):
+                            if p.get('user_id') == str(winner_id):
+                                # Use positional $ update
+                                await db.db.auctions.update_one(
+                                    {"_id": auction['_id'], "participants.user_id": p.get('user_id')},
+                                    {"$inc": {"participants.$.budget": -winning_bid}}
+                                )
+                                break
+                    except Exception:
+                        pass
+
                     # Announce winner
                     try:
                         winner = await self.bot.fetch_user(int(winner_id))
-                        embed = discord.Embed(
-                            title="🎊 SOLD!",
-                            description=f"**{current_player['name']}** sold to {winner.mention} for **${winning_bid:,}**!",
-                            color=COLORS['success']
-                        )
+                        if added_to_team:
+                            embed = discord.Embed(
+                                title="🎊 SOLD!",
+                                description=f"**{current_player['name']}** sold to {winner.mention} for **${winning_bid:,}** and added to their squad!",
+                                color=COLORS['success']
+                            )
+                        else:
+                            embed = discord.Embed(
+                                title="🎊 SOLD (To Inventory)!",
+                                description=f"**{current_player['name']}** sold to {winner.mention} for **${winning_bid:,}** but their squad is full, so the player was added to their substitutes/inventory.",
+                                color=COLORS['success']
+                            )
                         await ctx.send(embed=embed)
                     except:
                         pass
